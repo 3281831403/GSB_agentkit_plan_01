@@ -1,0 +1,50 @@
+[project]
+name = "dak-agent"
+version = "0.1.0"
+description = "Decentralized Agent Kit Agent with A2A and MCP support"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "google-adk[a2a,db,mcp]>=2.8.0,<3",
+    "mcp>=1.28.1,<2",
+    "asyncpg>=0.30",
+    "fastapi>=0.139.0",
+    "uvicorn>=0.50.0",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
+    "openai>=2.44.0",
+    "anthropic>=0.116.0",
+    "PyYAML>=6.0.1",
+    "psycopg2-binary>=2.9.12",
+    "langfuse>=4.13.0",
+    "openinference-instrumentation>=0.1.54",
+    "openinference-instrumentation-google-adk>=0.1.17",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp>=1.27.0",
+    "litellm>=1.91.0",
+    "jsonschema>=4.25,<5",
+    # Solana + AP2/x402 support
+    "solana>=0.40.0",
+    "solders>=0.21.0",
+    # a2a-sdk 1.x はエージェントカードの wire format を変える（top-level `url` を廃し
+    # `supportedInterfaces` へ）。google-adk 2.8.0 自体は 0.3/1.x 両対応だが、DAK のカードは
+    # protocolVersion "0.2.6" を宣言しており 1.x クライアントは互換 transport を選べず、
+    # 1.x で配信したカードは 0.3 側の peer が読めない。1.x への移行は「カードの
+    # protocolVersion を 0.3.0+ に上げ、peer 間のバージョン混在をどう扱うか決める」作業
+    # （PR #76 参照）。それまで <1 に留める。
+    "a2a-sdk>=0.2.0,<1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dak_agent"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+

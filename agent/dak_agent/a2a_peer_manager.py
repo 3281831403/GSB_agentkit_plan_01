@@ -1,0 +1,88 @@
+"""
+A2A Peer Manager: loads A2A peers from agent_config.yaml and exposes them
+as remote sub-agents. Config-based, like MCP servers.
+"""
+import logging
+import os
+from typing import List
+
+from .config import load_agent_config
+
+logger = logging.getLogger(__name__)
+
+try:
+    from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
+    A2A_AVAILABLE = True
+except ImportError:
+    A2A_AVAILABLE = False
+    logger.warning("RemoteA2aAgent not available. A2A peer functionality disabled.")
+
+
+class A2APeerConfig:
+    """Configuration for a single A2A peer."""
+
+    def __init__(self, name: str, url: str, capabilities: List[str] = None):
+        self.name = name
+        self.url = url
+        self.capabilities = capabilities or []
+
+    def __repr__(self):
+        return f"A2APeer({self.name}, {self.url}, caps={self.capabilities})"
+
+
+def load_a2a_peers_from_config(config_path: str = None) -> List[A2APeerConfig]:
+    """Load A2A peer configurations from agent_config.yaml."""
+    config = load_agent_config(config_path)
+    peers = []
+    for peer_config in config.a2a_peers:
+        peer = A2APeerConfig(
+            name=peer_config.get("name"),
+            url=peer_config.get("url"),
+            capabilities=peer_config.get("capabilities", []),
+        )
+        peers.append(peer)
+        logger.info(f"Loaded A2A peer: {peer}")
+    return peers
+
+
+def create_remote_a2a_agents(peers: List[A2APeerConfig]) -> List["RemoteA2aAgent"]:
+    """Create RemoteA2aAgent instances from peer configurations."""
+    if not A2A_AVAILABLE:
+        logger.warning("RemoteA2aAgent not available. Returning empty list.")
+        return []
+
+    agents = []
+    for peer in peers:
+        try:
+            caps_str = ", ".join(peer.capabilities) if peer.capabilities else "general purpose"
+            description = f"Remote agent '{peer.name}' at {peer.url}. Capabilities: {caps_str}"
+
+            # ADK serves the card at /a2a/{agent_name}/.well-known/agent-card.json (A2A SDK 0.2.6+)
+            agent_card_url = peer.url.rstrip("/") + "/a2a/dak_agent/.well-known/agent-card.json"
+
+            agent = RemoteA2aAgent(
+                name=peer.name,
+                agent_card=agent_card_url,
+                description=description,
+            )
+            agents.append(agent)
+            logger.info(f"Created RemoteA2aAgent: {peer.name} -> {agent_card_url}")
+        except Exception as e:
+            logger.error(f"Failed to create RemoteA2aAgent for {peer.name}: {e}")
+
+    return agents
+
+
+def get_a2a_sub_agents() -> List["RemoteA2aAgent"]:
+    """
+    Load A2A peers from config and create remote sub-agents.
+
+    Set ENABLE_A2A_CONSUMER=true to enable (Consumer mode). Provider agents
+    should not set this, to avoid delegation loops.
+    """
+    if os.getenv("ENABLE_A2A_CONSUMER", "false").lower() != "true":
+        logger.info("A2A Consumer mode disabled. No sub-agents loaded.")
+        return []
+
+    peers = load_a2a_peers_from_config()
+    return create_remote_a2a_agents(peers)

@@ -1,0 +1,9 @@
+mcp_servers:
+  - name: "local-mcp"
+    url: "http://mcp-server:8000/mcp"
+    type: "http"
+
+a2a_peers:
+  - name: "agent_provider"
+    url: "http://agent-provider:8000"
+    capabilities: ["premium_service"]

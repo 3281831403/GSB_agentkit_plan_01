@@ -1,0 +1,85 @@
+services:
+  agent:
+    build: ./agent
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://username:password@postgres:5432/postgres
+      - MCP_SERVER_URL=http://mcp-server:8000/mcp
+      # Bare pass-through: host shell value, else .env (env_file), else unset.
+      # Unset resolves in agent/dak_agent/config.py: legacy GEMINI_MODEL_NAME
+      # (if .env still carries it), then DEFAULT_MODEL_NAME. No default is
+      # repeated here on purpose (guarded by agent/tests/test_config.py).
+      - MODEL_NAME
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GEMINI_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - LOCAL_LLM_BASE_URL=http://ollama:11434/v1
+      - LOCAL_LLM_API_KEY=ollama
+      - OLLAMA_API_BASE=http://ollama:11434
+      # Amazon Bedrock (optional; MODEL_NAME=bedrock/...) — see docs/getting-started/bedrock.md
+      # Bare pass-through (no "=${VAR:-}") so unset vars stay unset in the
+      # container: litellm treats an empty-string region as "configured" and
+      # then rejects it instead of falling back to AWS_REGION/AWS_DEFAULT_REGION.
+      - AWS_REGION_NAME
+      - AWS_REGION
+      - AWS_DEFAULT_REGION
+      - AWS_BEARER_TOKEN_BEDROCK
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_SESSION_TOKEN
+    depends_on:
+      - postgres
+    volumes:
+      - ./agent/agent_config.yaml:/app/agent_config.yaml
+
+  mcp-server:
+    build: ./mcp-server
+    ports:
+      - "8001:8000" # Map host 8001 to container 8000 (default SSE port)
+    env_file:
+      - .env
+    environment:
+      - AGENT_URL=http://agent:8000
+      - UVICORN_HOST=0.0.0.0
+    volumes:
+      - .:/projects
+    depends_on:
+      - agent
+
+  bff:
+    build: ./bff
+    ports:
+      - "8002:8000"
+    environment:
+      - AGENT_URL=http://agent:8000
+    depends_on:
+      - agent
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=username
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # Optional local LLM provider. Start with: docker compose --profile local-llm up
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  postgres_data:
+  ollama_data:
